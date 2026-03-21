@@ -1,0 +1,47 @@
+name: Commit Lint
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate pushed commit messages
+        if: github.event_name == 'push'
+        run: |
+          before="${{ github.event.before }}"
+          after="${{ github.sha }}"
+          if [ "$before" = "0000000000000000000000000000000000000000" ]; then
+            python3 scripts/check_commit_refs.py --rev-list "$after"
+          else
+            python3 scripts/check_commit_refs.py --rev-range "$before..$after"
+          fi
+
+      - name: Validate pull request commit messages
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          python3 scripts/check_commit_refs.py --rev-range "origin/${{ github.base_ref }}..HEAD"
